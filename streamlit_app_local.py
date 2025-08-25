@@ -5,31 +5,10 @@ from pathlib import Path
 import time
 from datetime import datetime
 
-# Disable ChromaDB to avoid SQLite version issues on Streamlit Cloud
-os.environ["CHROMA_DB_IMPL"] = "duckdb+parquet"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
 # Add the src directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent / "src"))
 
-# Import with error handling for ChromaDB issues
-try:
-    from resourcesuggest.crew import ResourceSuggester
-except RuntimeError as e:
-    if "sqlite3" in str(e):
-        st.error("""
-        ⚠️ **Deployment Issue Detected**
-        
-        This app requires a newer version of SQLite. Please try one of these solutions:
-        
-        1. **Use the local version** with `streamlit run streamlit_app.py`
-        2. **Deploy to a different platform** that supports SQLite 3.35+
-        3. **Contact support** for SQLite upgrade
-        
-        Error: """ + str(e))
-        st.stop()
-    else:
-        raise e
+from resourcesuggest.crew import ResourceSuggester
 
 # Page configuration
 st.set_page_config(
