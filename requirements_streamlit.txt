@@ -1,0 +1,8 @@
+streamlit>=1.48.0
+crewai>=0.159.0
+crewai-tools>=0.62.0
+youtube-search-python==1.4.6
+httpx==0.27.2
+openai>=1.99.0
+python-dotenv>=1.1.0
+numpy<2.0.0

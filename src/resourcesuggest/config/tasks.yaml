@@ -1,0 +1,52 @@
+# # src/latest_ai_development/config/tasks.yaml
+# research_task:
+#   description: >
+#     Conduct a thorough research about {topic}
+#     Make sure you find any interesting and relevant information given
+#     the current year is 2025.
+#   expected_output: >
+#     A list with 10 bullet points of the most relevant information about {topic}
+#   agent: researcher
+
+# reporting_task:
+#   description: >
+#     Review the context you got and expand each topic into a full section for a report.
+#     Make sure the report is detailed and contains any and all relevant information.
+#   expected_output: >
+#     A fully fledge reports with the mains topics, each with a full section of information.
+#     Formatted as markdown without '```'
+#   agent: reporting_analyst
+#   output_file: report.md
+
+ 
+research_task:
+  description: >
+    Research {topic} thoroughly using reliable web sources and YouTube. Focus on:
+      1. Summarizing the main ideas and key takeaways
+      2. Identifying high-quality websites for deeper reading
+      3. Finding relevant YouTube videos that explain or expand on the topic
+
+    Ensure the findings are accurate, clear, and well-organized.
+  expected_output: >
+    A structured research summary of {topic} that includes:
+      - A concise written overview (main concepts, insights, and takeaways)
+      - A list of website URLs for further reading
+      - A list of relevant YouTube video links
+  agent: researcher
+
+summary_task:
+  description: >
+    Create a polished, reader-friendly summary of the research findings on {topic}. 
+    The summary should:
+      1. Highlight the most important insights
+      2. Be concise and easy to read
+      3. Provide context and clarity without unnecessary detail
+      4. Reference the provided URLs and YouTube links in an organized way
+  expected_output: >
+    A final summary document on {topic} that clearly explains the main ideas, 
+    highlights key resources, and includes the list of recommended websites 
+    and YouTube videos. The summary should be structured with clear sections.
+  agent: writer
+  context:
+    - research_task
+  output_file: output/summary.md
