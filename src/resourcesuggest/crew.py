@@ -5,6 +5,10 @@ from crewai.project import CrewBase, agent, task, crew
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from youtubesearchpython import VideosSearch
 
 @CrewBase
@@ -58,12 +62,24 @@ class ResourceSuggester:
             description="""
                 Research {topic} thoroughly using reliable web sources and YouTube.
                 Summarize main ideas, identify high-quality websites, and find relevant YouTube videos.
+                Use the YouTubeSearchTool to find relevant videos and SerperDevTool for web research.
             """,
             expected_output="""
                 Structured research summary of {topic}:
-                - Concise overview
-                - List of website URLs
-                - List of YouTube video links
+                
+                ## Overview
+                [Provide a concise overview of the topic]
+                
+                ## Key Findings
+                [List main insights and important information]
+                
+                ## Recommended Websites
+                [List specific website URLs with brief descriptions]
+                
+                ## Recommended YouTube Videos
+                [List YouTube video URLs with titles and brief descriptions]
+                
+                Make sure to include actual URLs and video links in the output.
             """
         )
 
@@ -75,12 +91,26 @@ class ResourceSuggester:
             description="""
                 Create a polished summary of research findings on {topic}.
                 Highlight important insights, be concise, and reference URLs and videos.
+                Preserve all website URLs and YouTube video links from the research task.
             """,
             expected_output="""
                 Final summary document on {topic}:
-                - Main ideas explained
-                - Key resources highlighted
-                - List of recommended websites and YouTube videos
+                
+                ## Executive Summary
+                [Provide a comprehensive but concise summary of the topic]
+                
+                ## Key Insights
+                [Highlight the most important findings and insights]
+                
+                ## Recommended Resources
+                
+                ### Websites
+                [List and describe recommended websites with full URLs]
+                
+                ### YouTube Videos
+                [List and describe recommended YouTube videos with full URLs]
+                
+                Ensure all URLs are complete and clickable links.
             """,
             context=[self.research_task()],  # link to research_task
             output_file="output/summary.md"

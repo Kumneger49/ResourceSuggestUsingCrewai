@@ -4,11 +4,12 @@ import sys
 from pathlib import Path
 import time
 from datetime import datetime
+import requests
+import json
+import re
 
 # Add the src directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent / "src"))
-
-from resourcesuggest.crew import ResourceSuggester
 
 # Page configuration
 st.set_page_config(
@@ -90,6 +91,92 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def search_web(topic, api_key):
+    """Search the web using a simple search API"""
+    try:
+        # Using a simple search approach that doesn't require ChromaDB
+        search_url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1&skip_disambig=1"
+        response = requests.get(search_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            results = []
+            if 'AbstractURL' in data and data['AbstractURL']:
+                results.append({
+                    'title': data.get('Abstract', f'Information about {topic}'),
+                    'url': data['AbstractURL'],
+                    'snippet': data.get('Abstract', '')
+                })
+            if 'RelatedTopics' in data:
+                for topic_item in data['RelatedTopics'][:5]:
+                    if isinstance(topic_item, dict) and 'FirstURL' in topic_item:
+                        results.append({
+                            'title': topic_item.get('Text', f'Related to {topic}'),
+                            'url': topic_item['FirstURL'],
+                            'snippet': topic_item.get('Text', '')
+                        })
+            return results
+    except Exception as e:
+        st.warning(f"Web search error: {str(e)}")
+    return []
+
+def search_youtube(topic):
+    """Search YouTube using a simple approach"""
+    try:
+        # Using a simple YouTube search approach
+        search_url = f"https://www.youtube.com/results?search_query={topic.replace(' ', '+')}"
+        return [{
+            'title': f'YouTube search results for "{topic}"',
+            'url': search_url,
+            'description': f'Search YouTube for videos about {topic}'
+        }]
+    except Exception as e:
+        st.warning(f"YouTube search error: {str(e)}")
+    return []
+
+def generate_summary_with_openai(topic, web_results, youtube_results, api_key):
+    """Generate a summary using OpenAI API directly"""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Prepare the content for the AI
+        web_content = "\n".join([f"- {result['title']}: {result['url']}" for result in web_results])
+        youtube_content = "\n".join([f"- {result['title']}: {result['url']}" for result in youtube_results])
+        
+        prompt = f"""
+        Research and provide a comprehensive summary about: {topic}
+        
+        Web Resources Found:
+        {web_content}
+        
+        YouTube Resources Found:
+        {youtube_content}
+        
+        Please provide a structured response with:
+        1. Executive Summary
+        2. Key Insights
+        3. Recommended Websites (with URLs)
+        4. Recommended YouTube Videos (with URLs)
+        
+        Make sure to include all the URLs provided and add any additional relevant information.
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful research assistant that provides comprehensive summaries with specific resource recommendations."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        st.error(f"OpenAI API error: {str(e)}")
+        return f"Error generating summary: {str(e)}"
+
 def main():
     # Header
     st.markdown('<h1 class="main-header">🔍 ResourceSuggester AI</h1>', unsafe_allow_html=True)
@@ -138,7 +225,7 @@ def main():
         # About section
         st.subheader("ℹ️ About")
         st.markdown("""
-        **ResourceSuggester AI** uses advanced AI agents to:
+        **ResourceSuggester AI** uses advanced AI to:
         - 🔍 Search the web for relevant information
         - 📺 Find educational YouTube videos
         - 📝 Create comprehensive summaries
@@ -171,26 +258,24 @@ def main():
         if start_research and topic and api_key:
             with st.spinner("🤖 AI agents are researching your topic..."):
                 try:
-                    # Initialize the crew
-                    crew = ResourceSuggester().crew()
-                    
                     # Progress tracking
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
-                    # Simulate progress updates
-                    for i in range(100):
-                        time.sleep(0.05)
-                        progress_bar.progress(i + 1)
-                        if i < 30:
-                            status_text.text("🔍 Researcher agent is gathering information...")
-                        elif i < 70:
-                            status_text.text("📝 Writer agent is creating summary...")
-                        else:
-                            status_text.text("✨ Finalizing results...")
+                    # Step 1: Web Search
+                    status_text.text("🔍 Searching the web...")
+                    progress_bar.progress(25)
+                    web_results = search_web(topic, api_key)
                     
-                    # Run the crew
-                    result = crew.kickoff(inputs={"topic": topic})
+                    # Step 2: YouTube Search
+                    status_text.text("📺 Searching YouTube...")
+                    progress_bar.progress(50)
+                    youtube_results = search_youtube(topic)
+                    
+                    # Step 3: Generate Summary
+                    status_text.text("📝 Generating AI summary...")
+                    progress_bar.progress(75)
+                    summary = generate_summary_with_openai(topic, web_results, youtube_results, api_key)
                     
                     progress_bar.progress(100)
                     status_text.text("✅ Research complete!")
@@ -198,17 +283,12 @@ def main():
                     # Display results
                     st.success("🎉 Research completed successfully!")
                     
-                    # Parse the result to extract resources
-                    result_text = str(result)
-                    if hasattr(result, 'raw') and result.raw:
-                        result_text = str(result.raw)
+                    # Parse the summary to extract resources
+                    result_text = summary
                     
                     # Extract websites and videos from the result
                     websites = []
                     videos = []
-                    
-                    # Look for URLs in the result
-                    import re
                     
                     # Extract all URLs first
                     url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
@@ -274,12 +354,8 @@ def main():
                     st.subheader("📊 Research Results")
                     
                     # Debug information (can be toggled)
-                    show_debug = st.checkbox("🔧 Show Debug Information", value=False)
-                    if show_debug:
-                        with st.expander("Debug Info"):
-                            st.write("**Extracted Websites:**", websites)
-                            st.write("**Extracted Videos:**", videos)
-                            st.write("**Raw Result:**", result_text[:500] + "..." if len(result_text) > 500 else result_text)
+                     
+                     
                     
                     # Create tabs for different result types
                     tab1, tab2, tab3 = st.tabs(["📝 Summary", "🌐 Web Resources", "📺 Video Resources"])
@@ -315,7 +391,7 @@ def main():
 # Research Results: {topic}
 
 ## Summary
-{str(result)}
+{result_text}
 
 ## Generated on
 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -330,11 +406,12 @@ def main():
                     
                     with col_dl2:
                         if st.button("📊 Download as JSON"):
-                            import json
                             json_content = {
                                 "topic": topic,
                                 "timestamp": datetime.now().isoformat(),
-                                "results": str(result)
+                                "results": result_text,
+                                "websites": websites,
+                                "videos": videos
                             }
                             
                             st.download_button(

@@ -1,5 +1,5 @@
 # main.py
-from resourcesuggest.crew import ResourceSuggester
+from crew import ResourceSuggester
 
 def run():
     topic = input("What topic do you want to research? ")
