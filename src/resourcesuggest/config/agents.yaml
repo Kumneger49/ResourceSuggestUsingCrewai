@@ -11,7 +11,7 @@ researcher:
     information from websites and YouTube channels. Known for organizing 
     findings into clear, structured summaries that make complex topics 
     easy to understand.
-  llm: openai/gpt-3.5-turbo
+  llm: openai/gpt-4
 
 writer:
   role: Senior Content Writer for {topic}
@@ -23,5 +23,5 @@ writer:
     into compelling narratives. You specialize in creating articles, reports, and 
     summaries that balance accuracy with readability, ensuring the key insights are 
     accessible, impactful, and polished.
-  llm: openai/gpt-4o-mini
+  llm: openai/gpt-4
 
