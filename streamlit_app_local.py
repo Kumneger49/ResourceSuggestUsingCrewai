@@ -149,14 +149,37 @@ def main():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
+        # Check if API key is provided
+        if not api_key:
+            st.error("⚠️ **Please enter your OpenAI API key in the sidebar to start researching!**")
+            st.info("💡 The API key is required to enable AI-powered research functionality.")
+        else:
+            st.success("✅ **API Key configured! You can now start researching.**")
+        
         # Topic input
         st.subheader("🎯 What would you like to research?")
         
+        # Initialize topic from session state if available
+        if 'suggested_topic' in st.session_state:
+            default_topic = st.session_state.suggested_topic
+            # Clear the session state after using it
+            del st.session_state.suggested_topic
+        else:
+            default_topic = ""
+        
         topic = st.text_input(
             "Enter your research topic",
+            value=default_topic,
             placeholder="e.g., machine learning, climate change, blockchain technology...",
             help="Be specific for better results"
         )
+        
+        # Check if we should auto-start research (from example topic click)
+        auto_start_research = False
+        if 'auto_start_research' in st.session_state and st.session_state.auto_start_research:
+            auto_start_research = True
+            # Clear the flag after using it
+            del st.session_state.auto_start_research
         
         # Research button
         col_button1, col_button2, col_button3 = st.columns([1, 2, 1])
@@ -168,7 +191,11 @@ def main():
             )
         
         # Display results
-        if start_research and topic and api_key:
+        if (start_research or auto_start_research) and topic and api_key:
+            # Show auto-research indicator if triggered by example topic
+            if auto_start_research:
+                st.info(f"🔍 **Auto-researching:** {topic}")
+            
             with st.spinner("🤖 AI agents are researching your topic..."):
                 try:
                     # Initialize the crew
@@ -363,16 +390,29 @@ def main():
                 "Digital Marketing Strategies"
             ]
             
-            cols = st.columns(3)
-            for i, topic_example in enumerate(example_topics):
-                with cols[i % 3]:
-                    if st.button(topic_example, key=f"example_{i}"):
-                        st.session_state.suggested_topic = topic_example
-                        st.rerun()
-            
-            # Display suggested topic if selected
-            if 'suggested_topic' in st.session_state:
-                st.info(f"💡 Try researching: **{st.session_state.suggested_topic}**")
+            # Check if API key is provided for example topics
+            if not api_key:
+                st.warning("🔒 **Example topics are disabled. Please enter your OpenAI API key in the sidebar to enable them.**")
+                # Show disabled example topics
+                cols = st.columns(3)
+                for i, topic_example in enumerate(example_topics):
+                    with cols[i % 3]:
+                        st.button(
+                            topic_example, 
+                            key=f"example_{i}",
+                            disabled=True,
+                            help="Enter your OpenAI API key to enable this feature"
+                        )
+            else:
+                # Show active example topics
+                cols = st.columns(3)
+                for i, topic_example in enumerate(example_topics):
+                    with cols[i % 3]:
+                        if st.button(topic_example, key=f"example_{i}"):
+                            # Set the topic and trigger research immediately
+                            st.session_state.suggested_topic = topic_example
+                            st.session_state.auto_start_research = True
+                            st.rerun()
 
 if __name__ == "__main__":
     main()
