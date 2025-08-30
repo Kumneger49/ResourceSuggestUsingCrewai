@@ -7,12 +7,10 @@ from datetime import datetime
 import requests
 import json
 import re
+from youtubesearchpython import VideosSearch
 
 # Add the src directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent / "src"))
-
-# Import your existing CrewAI pipeline
-from resourcesuggest.crew import ResourceSuggester
 
 # Page configuration
 st.set_page_config(
@@ -94,22 +92,125 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def run_crewai_research(topic, api_key):
-    """Run research using your existing CrewAI pipeline"""
+def search_youtube_videos(topic: str):
+    """
+    Search YouTube for videos about the topic.
+    Replicates your YouTubeSearchTool functionality.
+    """
     try:
-        # Set the API key for CrewAI
-        os.environ["OPENAI_API_KEY"] = api_key
+        videos = VideosSearch(topic, limit=5)
+        video_list = []
+        for v in videos.result()['result']:
+            video_list.append({"title": v['title'], "link": v['link']})
+        return video_list
+    except Exception as e:
+        st.warning(f"YouTube search error: {str(e)}")
+        return []
+
+def search_web_resources(topic: str):
+    """
+    Search the web for information about the topic.
+    Replicates web search functionality without ChromaDB.
+    """
+    try:
+        # Using DuckDuckGo API for web search
+        search_url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1&skip_disambig=1"
+        response = requests.get(search_url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            results = []
+            if 'AbstractURL' in data and data['AbstractURL']:
+                results.append({
+                    'title': data.get('Abstract', f'Information about {topic}'),
+                    'url': data['AbstractURL'],
+                    'snippet': data.get('Abstract', '')
+                })
+            if 'RelatedTopics' in data:
+                for topic_item in data['RelatedTopics'][:5]:
+                    if isinstance(topic_item, dict) and 'FirstURL' in topic_item:
+                        results.append({
+                            'title': topic_item.get('Text', f'Related to {topic}'),
+                            'url': topic_item['FirstURL'],
+                            'snippet': topic_item.get('Text', '')
+                        })
+            return results
+    except Exception as e:
+        st.warning(f"Web search error: {str(e)}")
+    return []
+
+def run_research_pipeline(topic: str, api_key: str):
+    """
+    Replicates your CrewAI pipeline functionality without using CrewAI directly.
+    This mimics the researcher and writer agents workflow.
+    """
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
         
-        # Use your existing ResourceSuggester pipeline
-        crew = ResourceSuggester().crew()
+        # Step 1: Research Phase (Researcher Agent)
+        st.info("🔍 **Researcher Agent**: Gathering information from web and YouTube...")
         
-        # Run the research using your configured agents and tasks
-        result = crew.kickoff(inputs={"topic": topic})
+        # Get YouTube videos
+        youtube_videos = search_youtube_videos(topic)
         
-        return result
+        # Get web resources
+        web_resources = search_web_resources(topic)
+        
+        # Step 2: Research Summary (Researcher Agent Output)
+        research_content = f"""
+## Research Findings for: {topic}
+
+### Web Resources Found:
+"""
+        for i, resource in enumerate(web_resources, 1):
+            research_content += f"{i}. **{resource['title']}**: {resource['url']}\n   {resource['snippet']}\n\n"
+        
+        research_content += "\n### YouTube Videos Found:\n"
+        for i, video in enumerate(youtube_videos, 1):
+            research_content += f"{i}. **{video['title']}**: {video['link']}\n\n"
+        
+        # Step 3: Writer Agent Phase
+        st.info("📝 **Writer Agent**: Creating comprehensive summary...")
+        
+        writer_prompt = f"""
+You are a Senior Content Writer specializing in creating clear, engaging summaries of research findings.
+
+Based on the following research about "{topic}", create a comprehensive summary that includes:
+
+## Executive Summary
+Provide a clear overview of the topic and its key concepts.
+
+## Key Insights
+Highlight the most important findings and insights about {topic}.
+
+## Recommended Resources
+
+### Websites
+List and describe the recommended websites with their URLs.
+
+### YouTube Videos
+List and describe the recommended YouTube videos with their URLs.
+
+Research Content:
+{research_content}
+
+Make sure to include all the URLs provided and create a well-structured, reader-friendly summary.
+"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an experienced content writer who excels at turning complex research into compelling narratives. You specialize in creating articles, reports, and summaries that balance accuracy with readability."},
+                {"role": "user", "content": writer_prompt}
+            ],
+            max_tokens=2000,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
         
     except Exception as e:
-        st.error(f"CrewAI research error: {str(e)}")
+        st.error(f"Research pipeline error: {str(e)}")
         return f"Error during research: {str(e)}"
 
 def main():
@@ -224,14 +325,14 @@ def main():
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
-                    # Step 1: Initialize CrewAI Research
+                    # Step 1: Initialize Research
                     status_text.text("🤖 Initializing AI research agents...")
                     progress_bar.progress(25)
                     
-                    # Step 2: Run CrewAI Research
+                    # Step 2: Run Research Pipeline
                     status_text.text("🔍 AI agents are researching your topic...")
                     progress_bar.progress(50)
-                    result = run_crewai_research(topic, api_key)
+                    result = run_research_pipeline(topic, api_key)
                     
                     # Step 3: Process Results
                     status_text.text("📝 Processing research results...")
@@ -245,8 +346,6 @@ def main():
                     
                     # Parse the result to extract resources
                     result_text = str(result)
-                    if hasattr(result, 'raw') and result.raw:
-                        result_text = str(result.raw)
                     
                     # Extract websites and videos from the result
                     websites = []
@@ -314,10 +413,6 @@ def main():
                     
                     # Results section
                     st.subheader("📊 Research Results")
-                    
-                    # Debug information (can be toggled)
-                     
-                     
                     
                     # Create tabs for different result types
                     tab1, tab2, tab3 = st.tabs(["📝 Summary", "🌐 Web Resources", "📺 Video Resources"])
