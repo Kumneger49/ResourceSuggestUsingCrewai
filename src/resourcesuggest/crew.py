@@ -1,9 +1,10 @@
 from crewai import Agent, Task, Crew, Process
 from crewai.tools import tool
-from crewai_tools import YoutubeVideoSearchTool, FirecrawlSearchTool, SerperDevTool
+from crewai_tools import YoutubeVideoSearchTool, FirecrawlSearchTool
 from crewai.project import CrewBase, agent, task, crew
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
+import requests
 
 from dotenv import load_dotenv
 
@@ -32,6 +33,37 @@ class ResourceSuggester:
         
         return videoList
 
+    @tool("Web search")
+    def WebSearchTool(topic: str, **kwargs):
+        """
+        Search the web for information about a topic using DuckDuckGo API.
+        Returns search results with URLs and descriptions.
+        """
+        try:
+            search_url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1&skip_disambig=1"
+            response = requests.get(search_url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                results = []
+                if 'AbstractURL' in data and data['AbstractURL']:
+                    results.append({
+                        'title': data.get('Abstract', f'Information about {topic}'),
+                        'url': data['AbstractURL'],
+                        'snippet': data.get('Abstract', '')
+                    })
+                if 'RelatedTopics' in data:
+                    for topic_item in data['RelatedTopics'][:5]:
+                        if isinstance(topic_item, dict) and 'FirstURL' in topic_item:
+                            results.append({
+                                'title': topic_item.get('Text', f'Related to {topic}'),
+                                'url': topic_item['FirstURL'],
+                                'snippet': topic_item.get('Text', '')
+                            })
+                return results
+        except Exception as e:
+            return f"Web search error: {str(e)}"
+        return []
+
 
     # ----------------- Agents -----------------
     @agent
@@ -40,7 +72,7 @@ class ResourceSuggester:
             role="Researcher",
             goal="Deliver accurate insights on {topic} using web sources and YouTube",
             backstory="Experienced researcher synthesizing web & video info",
-            tools=[SerperDevTool(), self.YouTubeSearchTool],
+            tools=[self.WebSearchTool, self.YouTubeSearchTool],
             verbose=True
         )
 

@@ -11,6 +11,9 @@ import re
 # Add the src directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent / "src"))
 
+# Import your existing CrewAI pipeline
+from resourcesuggest.crew import ResourceSuggester
+
 # Page configuration
 st.set_page_config(
     page_title="ResourceSuggester AI",
@@ -91,91 +94,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def search_web(topic, api_key):
-    """Search the web using a simple search API"""
+def run_crewai_research(topic, api_key):
+    """Run research using your existing CrewAI pipeline"""
     try:
-        # Using a simple search approach that doesn't require ChromaDB
-        search_url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1&skip_disambig=1"
-        response = requests.get(search_url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            results = []
-            if 'AbstractURL' in data and data['AbstractURL']:
-                results.append({
-                    'title': data.get('Abstract', f'Information about {topic}'),
-                    'url': data['AbstractURL'],
-                    'snippet': data.get('Abstract', '')
-                })
-            if 'RelatedTopics' in data:
-                for topic_item in data['RelatedTopics'][:5]:
-                    if isinstance(topic_item, dict) and 'FirstURL' in topic_item:
-                        results.append({
-                            'title': topic_item.get('Text', f'Related to {topic}'),
-                            'url': topic_item['FirstURL'],
-                            'snippet': topic_item.get('Text', '')
-                        })
-            return results
-    except Exception as e:
-        st.warning(f"Web search error: {str(e)}")
-    return []
-
-def search_youtube(topic):
-    """Search YouTube using a simple approach"""
-    try:
-        # Using a simple YouTube search approach
-        search_url = f"https://www.youtube.com/results?search_query={topic.replace(' ', '+')}"
-        return [{
-            'title': f'YouTube search results for "{topic}"',
-            'url': search_url,
-            'description': f'Search YouTube for videos about {topic}'
-        }]
-    except Exception as e:
-        st.warning(f"YouTube search error: {str(e)}")
-    return []
-
-def generate_summary_with_openai(topic, web_results, youtube_results, api_key):
-    """Generate a summary using OpenAI API directly"""
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        # Set the API key for CrewAI
+        os.environ["OPENAI_API_KEY"] = api_key
         
-        # Prepare the content for the AI
-        web_content = "\n".join([f"- {result['title']}: {result['url']}" for result in web_results])
-        youtube_content = "\n".join([f"- {result['title']}: {result['url']}" for result in youtube_results])
+        # Use your existing ResourceSuggester pipeline
+        crew = ResourceSuggester().crew()
         
-        prompt = f"""
-        Research and provide a comprehensive summary about: {topic}
+        # Run the research using your configured agents and tasks
+        result = crew.kickoff(inputs={"topic": topic})
         
-        Web Resources Found:
-        {web_content}
-        
-        YouTube Resources Found:
-        {youtube_content}
-        
-        Please provide a structured response with:
-        1. Executive Summary
-        2. Key Insights
-        3. Recommended Websites (with URLs)
-        4. Recommended YouTube Videos (with URLs)
-        
-        Make sure to include all the URLs provided and add any additional relevant information.
-        """
-        
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful research assistant that provides comprehensive summaries with specific resource recommendations."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=1500,
-            temperature=0.7
-        )
-        
-        return response.choices[0].message.content
+        return result
         
     except Exception as e:
-        st.error(f"OpenAI API error: {str(e)}")
-        return f"Error generating summary: {str(e)}"
+        st.error(f"CrewAI research error: {str(e)}")
+        return f"Error during research: {str(e)}"
 
 def main():
     # Header
@@ -289,20 +224,18 @@ def main():
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
-                    # Step 1: Web Search
-                    status_text.text("🔍 Searching the web...")
+                    # Step 1: Initialize CrewAI Research
+                    status_text.text("🤖 Initializing AI research agents...")
                     progress_bar.progress(25)
-                    web_results = search_web(topic, api_key)
                     
-                    # Step 2: YouTube Search
-                    status_text.text("📺 Searching YouTube...")
+                    # Step 2: Run CrewAI Research
+                    status_text.text("🔍 AI agents are researching your topic...")
                     progress_bar.progress(50)
-                    youtube_results = search_youtube(topic)
+                    result = run_crewai_research(topic, api_key)
                     
-                    # Step 3: Generate Summary
-                    status_text.text("📝 Generating AI summary...")
+                    # Step 3: Process Results
+                    status_text.text("📝 Processing research results...")
                     progress_bar.progress(75)
-                    summary = generate_summary_with_openai(topic, web_results, youtube_results, api_key)
                     
                     progress_bar.progress(100)
                     status_text.text("✅ Research complete!")
@@ -310,8 +243,10 @@ def main():
                     # Display results
                     st.success("🎉 Research completed successfully!")
                     
-                    # Parse the summary to extract resources
-                    result_text = summary
+                    # Parse the result to extract resources
+                    result_text = str(result)
+                    if hasattr(result, 'raw') and result.raw:
+                        result_text = str(result.raw)
                     
                     # Extract websites and videos from the result
                     websites = []
