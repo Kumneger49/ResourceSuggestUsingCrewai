@@ -10,3 +10,4 @@ pandas>=1.4.0
 requests>=2.27.0
 chromadb
 python-dotenv
+pysqlite3-binary

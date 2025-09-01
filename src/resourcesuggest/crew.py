@@ -12,6 +12,12 @@ load_dotenv()
 
 from youtubesearchpython import VideosSearch
 
+
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
+
 @CrewBase
 class ResourceSuggester:
 
