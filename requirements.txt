@@ -8,3 +8,5 @@ python-dotenv>=1.1.0
 numpy<2.0.0
 pandas>=1.4.0
 requests>=2.27.0
+chromadb
+python-dotenv
